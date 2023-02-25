@@ -1,33 +1,7 @@
 import numpy as np
 import math
-
-def get_yaw_mat(yaw):
-    yaw_mat = np.array([[math.cos(np.deg2rad(yaw)),-math.sin(np.deg2rad(yaw)), 0, 0],
-                        [math.sin(np.deg2rad(yaw)),math.cos(np.deg2rad(yaw)), 0, 0],
-                        [0, 0, 1, 0],
-                        [0, 0, 0, 1]])
-    return yaw_mat
-
-def get_pitch_mat(pitch):
-    pitch_mat = np.array([[math.cos(np.deg2rad(pitch)), 0, math.sin(np.deg2rad(pitch)), 0],
-                        [0, 1, 0, 0],
-                        [-math.sin(np.deg2rad(pitch)), 0, math.cos(np.deg2rad(pitch)), 0],
-                        [0, 0, 0, 1]])
-    return pitch_mat
-
-def get_roll_mat(roll):
-    roll_mat = np.array([[1, 0, 0, 0],
-                        [0, math.cos(np.deg2rad(roll)), -math.sin(np.deg2rad(roll)), 0],
-                        [0, math.sin(np.deg2rad(roll)), math.cos(np.deg2rad(roll)), 0],
-                        [0, 0, 0, 1]])
-    return roll_mat
-
-def get_trans_mat(x,y,z):
-    trans_mat = np.array([[1, 0, 0, x],
-                        [0, 1, 0, y],
-                        [0, 0, 1, z],
-                        [0, 0, 0, 1]])
-    return trans_mat
+import cv2
+import lidarsimutils as lsu
 
 # transformation parameters from lidar
 # to goniometer coordinate system
@@ -44,10 +18,10 @@ l_points = np.array([[480, 480],
                    [1, 1]])
 
 # transformation matrices
-l2g_y_mat = get_yaw_mat(l2g_yaw)
-l2g_p_mat = get_pitch_mat(l2g_pitch)
-l2g_r_mat = get_roll_mat(l2g_roll)
-l2g_t_mat = get_trans_mat(l2g_x,l2g_y,l2g_z)
+l2g_y_mat = lsu.get_yaw_mat(l2g_yaw)
+l2g_p_mat = lsu.get_pitch_mat(l2g_pitch)
+l2g_r_mat = lsu.get_roll_mat(l2g_roll)
+l2g_t_mat = lsu.get_trans_mat(l2g_x,l2g_y,l2g_z)
 l2g_mat = np.matmul(l2g_p_mat,l2g_r_mat)
 l2g_mat = np.matmul(l2g_y_mat,l2g_mat)
 l2g_mat = np.matmul(l2g_t_mat,l2g_mat)
@@ -58,7 +32,7 @@ roll_before = np.rad2deg(math.atan(abs(l_points[2,0]-l_points[2,1])/abs(abs(l_po
 print("roll before: "+str(roll_before))
 # pitch for goniometer rotation
 pitch = 5
-rot_p_mat = get_pitch_mat(pitch)
+rot_p_mat = lsu.get_pitch_mat(pitch)
 g_points = np.matmul(l2g_mat,l_points)
 # rotate goniometer
 g_points_r = np.matmul(rot_p_mat,g_points)
