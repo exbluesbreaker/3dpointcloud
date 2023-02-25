@@ -88,12 +88,19 @@ l2g_mat = np.matmul(l2g_y_mat,l2g_mat)
 l2g_mat = np.matmul(l2g_t_mat,l2g_mat)
 g2l_mat = np.linalg.inv(l2g_mat)
 
-l_points = np.transpose(points)
-g_points = np.matmul(l2g_mat,l_points)
-g_points = np.transpose(g_points)
+g_points = np.transpose(points)
+
+# rotate goniometer in pitch
+pitch = 5
+rot_p_mat = lsu.get_pitch_mat(pitch)
+g_points = np.matmul(rot_p_mat,g_points)
+# transform coordinates to lidar
+l_points = np.matmul(g2l_mat,g_points)
+
+l_points = np.transpose(l_points)
 
 
-indices = approximate_lidar_points(g_points,hor_angles,vert_angles)
+indices = approximate_lidar_points(l_points,hor_angles,vert_angles)
 
 new_scene = np.zeros((h,w,1), np.uint8)
 
