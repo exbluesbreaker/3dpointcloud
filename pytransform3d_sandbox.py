@@ -45,23 +45,21 @@ vert_angles = np.linspace(vangle_first,vangle_last,h);
 
 
 # make 2 targets in for of t-shape for lidar
-scene = np.zeros((h,w,1), np.uint8)
-scene[100:115,320:364] = 255
-scene[120:170,339:345] = 255
-scene[100:115,644:688] = 255
-scene[120:170,663:669] = 255
+scan_000 = np.zeros((h,w,1), np.uint8)
+scan_000[100:115,320:364] = 255
+scan_000[120:170,339:345] = 255
+scan_000[100:115,644:688] = 255
+scan_000[120:170,663:669] = 255
+cv2.imshow("Inital scan",scan_000)
 
-points_g = lsu.get_scene_points(scene,hor_angles,vert_angles,dist_to_plane)
-cv2.imshow("Inital scene",scene)
+points_g = lsu.get_scene_points(scan_000,hor_angles,vert_angles,dist_to_plane)
 points_g_p5 = pt.transform(gonio2pitch,points_g)
-points_l = pt.transform(gonio2lidar,points_g_p5)
 
-print(points_g_p5.shape)
+# make pitch misalignment scene in gonio coordinates
+scan_gonio_p5 = lsu.points2scan(points_g_p5,hor_angles,vert_angles)
+cv2.imshow("Pitch rotation gonio",scan_gonio_p5)
 
 # make pitch misalignment scene in lidar coordinates
-indices_l_r = lsu.approximate_lidar_points(points_l,hor_angles,vert_angles)
-new_scene = np.zeros((h,w,1), np.uint8)
-for idx in indices_l_r:
-    new_scene[idx[1],idx[0]] = 255
-
-cv2.imshow("Pitch rotation",new_scene)
+points_l = pt.transform(gonio2lidar,points_g_p5)
+scan_lidar_p5 = lsu.points2scan(points_l,hor_angles,vert_angles)
+cv2.imshow("Pitch rotation lidar",scan_lidar_p5)

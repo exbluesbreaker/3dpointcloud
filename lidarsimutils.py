@@ -152,3 +152,12 @@ def approximate_lidar_points(points,hangles,vangles):
         va_idx = (np.abs(vangles - va)).argmin()
         indices.append((ha_idx,va_idx))
     return np.asarray(indices)
+
+# make approximate scan from given coordinates
+def points2scan(points,hor_angles,vert_angles):
+    indices = approximate_lidar_points(points,hor_angles,vert_angles)
+    scan = np.zeros((len(vert_angles),len(hor_angles),1), np.uint8)
+    for idx in indices:
+        scan[idx[1],idx[0]] = 255
+    return scan
+        
