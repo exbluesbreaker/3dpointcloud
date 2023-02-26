@@ -2,6 +2,7 @@ import numpy as np
 import math
 import cv2
 import lidarsimutils as lsu
+import statistics as st
 
 # get coordinates for point hit by lidar
 # at hangle/vangle for plane
@@ -24,7 +25,7 @@ def get_scene_points(scene,hangles,vangles,dist_000):
             if scene[row,col,0] != 0:
                 point = get_plane_xyz(hangles[col],vangles[row],dist_000)
                 points.append(point)
-    return np.asarray(points)
+    return np.transpose(np.asarray(points))
 
 # calculate vertical and horizontal angle
 # for given 3D coordinates
@@ -37,13 +38,16 @@ def get_ha_va(x,y,z):
 # for given points
 def approximate_lidar_points(points,hangles,vangles):
     indices = []
-    for point in points:
-        (ha,va) = get_ha_va(point[0],point[1],point[2])
+    for i in range(points.shape[1]):
+        x = points[0][i]
+        y = points[1][i]
+        z = points[2][i]
+        (ha,va) = get_ha_va(x,y,z)
         ha_idx = (np.abs(hangles - ha)).argmin()
         va_idx = (np.abs(vangles - va)).argmin()
         indices.append((ha_idx,va_idx))
     return np.asarray(indices)
-        
+
 
 h = 360
 w = 1008
@@ -56,7 +60,7 @@ vangle_first = np.deg2rad(9);
 vangle_last = np.deg2rad(-9);
 
 
-# make 2 targets for lidar  
+# make 2 targets in for of t-shape for lidar
 scene = np.zeros((h,w,1), np.uint8)
 scene[100:115,320:364] = 255
 scene[120:170,339:345] = 255
@@ -67,45 +71,63 @@ scene[120:170,663:669] = 255
 hor_angles = np.linspace(hangle_first,hangle_last,w);
 vert_angles = np.linspace(vangle_first,vangle_last,h);
 
-points = get_scene_points(scene,hor_angles,vert_angles,dist_to_plane)
+points_g = get_scene_points(scene,hor_angles,vert_angles,dist_to_plane)
 
 # transformation parameters from lidar
 # to goniometer coordinate system
-l2g_yaw = 1.2
-l2g_pitch = -1.8
-l2g_roll = 0.7
-l2g_x = 3.2
-l2g_y = -2.7
-l2g_z = 1.4
+yaw_g2l = 1.2
+pitch_g2l = 0
+roll_g2l = 0
+x_g2l = 0
+y_g2l = 0
+z_g2l = 0
 
 # transformation matrices
-l2g_y_mat = lsu.get_yaw_mat(l2g_yaw)
-l2g_p_mat = lsu.get_pitch_mat(l2g_pitch)
-l2g_r_mat = lsu.get_roll_mat(l2g_roll)
-l2g_t_mat = lsu.get_trans_mat(l2g_x,l2g_y,l2g_z)
-l2g_mat = np.matmul(l2g_p_mat,l2g_r_mat)
-l2g_mat = np.matmul(l2g_y_mat,l2g_mat)
-l2g_mat = np.matmul(l2g_t_mat,l2g_mat)
-g2l_mat = np.linalg.inv(l2g_mat)
+mat_y_g2l = lsu.get_yaw_mat(yaw_g2l)
+mat_p_g2l = lsu.get_pitch_mat(pitch_g2l)
+mat_r_g2l = lsu.get_roll_mat(roll_g2l)
+mat_t_g2l = lsu.get_trans_mat(x_g2l,y_g2l,z_g2l)
+mat_g2l = np.matmul(mat_p_g2l,mat_r_g2l)
+mat_g2l = np.matmul(mat_y_g2l,mat_g2l)
+mat_g2l = np.matmul(mat_t_g2l,mat_g2l)
+mat_l2g = np.linalg.inv(mat_g2l)
 
-g_points = np.transpose(points)
+# simulate goniometer pitch rotation
+pitch = -5
+mat_rot_p = lsu.get_pitch_mat(pitch)
+# points with pitch misalignment in gonio coordinate system
+points_g_r = np.matmul(mat_rot_p,points_g)
 
-# rotate goniometer in pitch
-pitch = 5
-rot_p_mat = lsu.get_pitch_mat(pitch)
-g_points = np.matmul(rot_p_mat,g_points)
-# transform coordinates to lidar
-l_points = np.matmul(g2l_mat,g_points)
-
-l_points = np.transpose(l_points)
+# points with pitch misalignment in lidar coordinate system
+points_l_r = np.matmul(mat_g2l,points_g_r)
 
 
-indices = approximate_lidar_points(l_points,hor_angles,vert_angles)
-
+# make rotated gonio scene
+indices_g = approximate_lidar_points(points_g_r,hor_angles,vert_angles)
 new_scene = np.zeros((h,w,1), np.uint8)
-
-for idx in indices:
+for idx in indices_g:
     new_scene[idx[1],idx[0]] = 255
 
-cv2.imshow("Out",new_scene)
+# find top segments for t-shapes
+segments = lsu.get_segments(new_scene)
+tb1_top, tb2_top = lsu.get_tshape_parts(segments)
+
+tshape_tops = np.zeros((h,w,1), np.uint8)
+
+for idx in tb1_top:
+    tshape_tops[idx[0],idx[1]] = 255
+
+for idx in tb2_top:
+    tshape_tops[idx[0],idx[1]] = 255
+
+top_points = get_scene_points(tshape_tops,hor_angles,vert_angles,dist_to_plane)
+
+x = [x for x in top_points[1,:]]
+y = [y for y in top_points[2,:]]
+roll, b = np.polyfit(x, y, 1)
+
+print("Roll: "+str(np.rad2deg(roll)))
+
+cv2.imshow("Pitch rotated",new_scene)
+cv2.imwrite("result.png",new_scene)
 
