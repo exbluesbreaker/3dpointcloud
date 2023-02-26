@@ -3,50 +3,10 @@ import math
 import cv2
 import lidarsimutils as lsu
 import statistics as st
+from pytransform3d import rotations as pr
+from pytransform3d import transformations as pt
 
-# get coordinates for point hit by lidar
-# at hangle/vangle for plane
-# which is perpendicular to X axis of lidar
-def get_plane_xyz(hangle,vangle, dist_000):
-    r = dist_000/(math.cos(hangle)*math.cos(vangle))
-    x = dist_000
-    y = r*math.cos(vangle)*math.sin(hangle)
-    z = r*math.sin(vangle)
-    # return homogeneous coordinates
-    return (x,y,z,1)
 
-# consider scene consist of a plane
-# which is perpendicular to X axis of lidar
-def get_scene_points(scene,hangles,vangles,dist_000):
-    shape = scene.shape
-    points = []
-    for row in range(shape[0]):
-        for col in range(shape[1]):
-            if scene[row,col,0] != 0:
-                point = get_plane_xyz(hangles[col],vangles[row],dist_000)
-                points.append(point)
-    return np.transpose(np.asarray(points))
-
-# calculate vertical and horizontal angle
-# for given 3D coordinates
-def get_ha_va(x,y,z):
-    hor_angle = math.atan(y/x)
-    vert_angle = math.atan(math.cos(hor_angle)*z/x)
-    return (hor_angle,vert_angle)
-
-# approximate va ha indices for lidar
-# for given points
-def approximate_lidar_points(points,hangles,vangles):
-    indices = []
-    for i in range(points.shape[1]):
-        x = points[0][i]
-        y = points[1][i]
-        z = points[2][i]
-        (ha,va) = get_ha_va(x,y,z)
-        ha_idx = (np.abs(hangles - ha)).argmin()
-        va_idx = (np.abs(vangles - va)).argmin()
-        indices.append((ha_idx,va_idx))
-    return np.asarray(indices)
 
 
 h = 360
@@ -98,35 +58,71 @@ mat_rot_p = lsu.get_pitch_mat(pitch)
 # points with pitch misalignment in gonio coordinate system
 points_g_r = np.matmul(mat_rot_p,points_g)
 
-# points with pitch misalignment in lidar coordinate system
-points_l_r = np.matmul(mat_g2l,points_g_r)
+# 000 points in lidar coordinate system
+points_l = np.matmul(mat_g2l,points_g)
 
 
-# make rotated gonio scene
-indices_g = approximate_lidar_points(points_g_r,hor_angles,vert_angles)
+# make 000 scene in lidar coordinates
+indices_l = approximate_lidar_points(points_l,hor_angles,vert_angles)
 new_scene = np.zeros((h,w,1), np.uint8)
-for idx in indices_g:
+for idx in indices_l:
     new_scene[idx[1],idx[0]] = 255
 
 # find top segments for t-shapes
 segments = lsu.get_segments(new_scene)
-tb1_top, tb2_top = lsu.get_tshape_parts(segments)
+tb1_top, tb2_top, tb1_bot, tb2_bot = lsu.get_tshape_parts(segments)
 
-tshape_tops = np.zeros((h,w,1), np.uint8)
+idx_tb1_top_mid  = (round(st.mean([pt[0] for pt in tb1_top])),round(st.mean([pt[1] for pt in tb1_top])))
+pt_tb1_top_mid = get_plane_xyz(hor_angles[idx_tb1_top_mid[1]],vert_angles[idx_tb1_top_mid[0]], dist_to_plane)
+pt_tb1_top_mid_rdist = get_rdist(hor_angles[idx_tb1_top_mid[1]],vert_angles[idx_tb1_top_mid[0]], dist_to_plane)
+idx_tb2_top_mid  = (round(st.mean([pt[0] for pt in tb2_top])),round(st.mean([pt[1] for pt in tb2_top])))
+pt_tb2_top_mid = get_plane_xyz(hor_angles[idx_tb2_top_mid[1]],vert_angles[idx_tb2_top_mid[0]], dist_to_plane)
+pt_tb2_top_mid_rdist = get_rdist(hor_angles[idx_tb2_top_mid[1]],vert_angles[idx_tb2_top_mid[0]], dist_to_plane)
+idx_tb1_bot_mid  = (round(st.mean([pt[0] for pt in tb1_bot])),round(st.mean([pt[1] for pt in tb1_bot])))
+pt_tb1_bot_mid = get_plane_xyz(hor_angles[idx_tb1_bot_mid[1]],vert_angles[idx_tb1_bot_mid[0]], dist_to_plane)
+pt_tb1_bot_mid_rdist = get_rdist(hor_angles[idx_tb1_bot_mid[1]],vert_angles[idx_tb1_bot_mid[0]], dist_to_plane)
+idx_tb2_bot_mid  = (round(st.mean([pt[0] for pt in tb2_bot])),round(st.mean([pt[1] for pt in tb2_bot])))
+pt_tb2_bot_mid = get_plane_xyz(hor_angles[idx_tb2_bot_mid[1]],vert_angles[idx_tb2_bot_mid[0]], dist_to_plane)
+pt_tb2_bot_mid_rdist = get_rdist(hor_angles[idx_tb2_bot_mid[1]],vert_angles[idx_tb2_bot_mid[0]], dist_to_plane)
 
-for idx in tb1_top:
-    tshape_tops[idx[0],idx[1]] = 255
 
-for idx in tb2_top:
-    tshape_tops[idx[0],idx[1]] = 255
 
-top_points = get_scene_points(tshape_tops,hor_angles,vert_angles,dist_to_plane)
+# pitch misalignment points in lidar coordinate system
+points_l_r = np.matmul(mat_g2l,points_g_r)
 
-x = [x for x in top_points[1,:]]
-y = [y for y in top_points[2,:]]
-roll, b = np.polyfit(x, y, 1)
+points_l_r = np.matmul(mat_l2g,points_l_r)
 
-print("Roll: "+str(np.rad2deg(roll)))
+
+# make pitch misalignment scene in lidar coordinates
+indices_l_r = approximate_lidar_points(points_l_r,hor_angles,vert_angles)
+new_scene = np.zeros((h,w,1), np.uint8)
+for idx in indices_l_r:
+    new_scene[idx[1],idx[0]] = 255
+
+# find top segments for t-shapes
+segments = lsu.get_segments(new_scene)
+tb1_top, tb2_top, tb1_bot, tb2_bot = lsu.get_tshape_parts(segments)
+
+idx_tb1_top_mid  = (round(st.mean([pt[0] for pt in tb1_top])),round(st.mean([pt[1] for pt in tb1_top])))
+pt_tb1_top_mid_r = get_xyz(hor_angles[idx_tb1_top_mid[1]],vert_angles[idx_tb1_top_mid[0]], pt_tb1_top_mid_rdist)
+idx_tb2_top_mid  = (round(st.mean([pt[0] for pt in tb2_top])),round(st.mean([pt[1] for pt in tb2_top])))
+pt_tb2_top_mid_r = get_xyz(hor_angles[idx_tb2_top_mid[1]],vert_angles[idx_tb2_top_mid[0]], pt_tb2_top_mid_rdist)
+idx_tb1_bot_mid  = (round(st.mean([pt[0] for pt in tb1_bot])),round(st.mean([pt[1] for pt in tb1_bot])))
+pt_tb1_bot_mid_r = get_xyz(hor_angles[idx_tb1_bot_mid[1]],vert_angles[idx_tb1_bot_mid[0]], pt_tb1_bot_mid_rdist)
+idx_tb2_bot_mid  = (round(st.mean([pt[0] for pt in tb2_bot])),round(st.mean([pt[1] for pt in tb2_bot])))
+pt_tb2_bot_mid_r = get_xyz(hor_angles[idx_tb2_bot_mid[1]],vert_angles[idx_tb2_bot_mid[0]], pt_tb2_bot_mid_rdist)
+
+vector1 = (pt_tb1_top_mid_r[0]-pt_tb2_bot_mid_r[0],pt_tb1_top_mid_r[1]-pt_tb2_bot_mid_r[1],pt_tb1_top_mid_r[2]-pt_tb2_bot_mid_r[2])
+vector2 = (pt_tb2_top_mid_r[0]-pt_tb1_bot_mid_r[0],pt_tb2_top_mid_r[1]-pt_tb1_bot_mid_r[1],pt_tb2_top_mid_r[2]-pt_tb1_bot_mid_r[2])
+
+normal = np.cross(np.asarray(vector1),np.asarray(vector2))
+normal = normal/np.linalg.norm(normal)
+
+print(np.rad2deg(math.asin(normal[2])))
+
+print(pr.active_matrix_from_angle(2,np.deg2rad(yaw_g2l)))
+print(mat_y_g2l)
+ 
 
 cv2.imshow("Pitch rotated",new_scene)
 cv2.imwrite("result.png",new_scene)
