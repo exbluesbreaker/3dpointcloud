@@ -22,6 +22,38 @@ def ray_rect_intersection(u,p1,p2,p3,p4):
     else:
             return False
 
+class LidarTarget:
+    def __init__(self,p1,p2,p3,p4):
+        self.p1 = p1
+        self.p2 = p2
+        self.p3 = p3
+        self.p4 = p4
+        self.v1 = p2 - p1
+        self.v2 = p3 - p1
+        self.v3 = p4 - p1
+        # manual cross product for speed
+        self.n = np.cross(self.v1,self.v2)
+        self.dot_p1_v1 = np.dot(self.p1,self.v1)
+        self.dot_p2_v1 = np.dot(self.p2,self.v1)
+        self.dot_p1_v3 = np.dot(self.p1,self.v3)
+        self.dot_p4_v3 = np.dot(self.p4,self.v3)
+        self.dot_p1_n = (self.p1[0]*self.n[0]+self.p1[1]*self.n[1]+self.p1[2]*self.n[2])
+
+    def ray_rect_intersection(self,u):
+        # returns true if ray specified by vector u
+        # intersects rectangle specified by point p1,p2,p3,p4
+        #
+        # find intersection point
+        # dot(t*u,N) shall be equal to 0
+        t = self.dot_p1_n/(u[0]*self.n[0]+u[1]*self.n[1]+u[2]*self.n[2])
+        inter_p = u*t
+        # https://math.stackexchange.com/questions/476608/how-to-check-if-point-is-within-a-rectangle-on-a-plane-in-3d-space
+        if (self.dot_p1_v1 <= np.dot(inter_p,self.v1) and  np.dot(inter_p,self.v1) <= self.dot_p2_v1 and
+            self.dot_p1_v3 <= np.dot(inter_p,self.v3) and np.dot(inter_p,self.v3) <= self.dot_p4_v3):
+            return True
+        else:
+            return False
+
 class LidarScene:
     def __init__(self, num_shots, num_layers,min_ha,max_ha,min_va,max_va):
         self.num_shots = num_shots
@@ -42,10 +74,8 @@ class LidarScene:
             self.sincos_cache["cos_va"].append(math.cos(self.vert_angles[v_idx]))
 
     def add_rect(self,p1,p2,p3,p4):
-        self.targets.append({"p1":p1,
-                             "p2":p2,
-                             "p3":p3,
-                             "p4":p4})
+        new_rect = LidarTarget(p1,p2,p3,p4)
+        self.targets.append(new_rect)
 
     def get_unit_vector(self,h_idx,v_idx):
         # return unit vector of lidar shot for given angles
@@ -66,6 +96,6 @@ class LidarScene:
             for v_idx in range(self.num_layers):
                 u = self.get_unit_vector(h_idx,v_idx)
                 for r in self.targets:
-                    if ray_rect_intersection(u,r["p1"],r["p2"],r["p3"],r["p4"]):
+                    if r.ray_rect_intersection(u):
                         scan[v_idx,h_idx] = 255
         return scan
