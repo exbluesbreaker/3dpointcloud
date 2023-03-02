@@ -65,3 +65,12 @@ pprint(mat_ypr_full,wrap_line=False)
 # check that new origin stays the same after rotation
 print("\nCheck rotation origin after YPR rotation(should not change):\n")
 pprint(simplify(mat_ypr_full*rot_origin.col_join(Matrix([[1]]))),wrap_line=False)
+
+# pitch rotation around different origin for a point
+x,y,z = symbols("x y z")
+point = Matrix([[x],
+                [y],
+                [z],
+                [1]])
+print("\nPitch rotation example:\n")
+pprint(simplify(mat_pitch_full*point),wrap_line=False)
