@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from statistics import mean
 from pytransform3d import transformations as pt
 import math
@@ -224,9 +225,9 @@ class Segmentation:
         for p in self.tb2_top:
             point = get_plane_xyz(self.hor_angles[p[1]],self.vert_angles[p[0]],self.dist_to_target)
             points_3d.append(point)
-        x = [p[1] for p in points_3d]
-        y = [p[2] for p in points_3d]
-        roll, b = np.polyfit(x, y, 1)
-        return np.rad2deg(roll)
+        x = np.asarray([p[1] for p in points_3d])
+        y = np.asarray([p[2] for p in points_3d])
+        a, b = np.polyfit(x, y, 1)
+        return np.rad2deg(math.atan(a))
 
         
